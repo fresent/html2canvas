@@ -6,8 +6,6 @@ import {getAbsoluteValue, isLengthPercentage} from './length-percentage';
 import {Context} from '../../core/context';
 export type Color = number;
 
-import parseOklch from '../../../node_modules/culori/src/oklch/parseOklch';
-
 export const color: ITypeDescriptor<Color> = {
     name: 'color',
     parse: (context: Context, value: CSSValue): Color => {
@@ -123,33 +121,43 @@ function hue2rgb(t1: number, t2: number, hue: number): number {
     }
 }
 
-function oklchToRgb(l : number, c : number, h : number) : number[] {
-    // Step 1: OKLCH to OKLAB.
-    const a = c * Math.cos(h);
-    const b = c * Math.sin(h);
+function oklchToRgb(l, c, h) {
+    // Step 1: Convert OKLCH to OKLab
+    let a = c * Math.cos(h * Math.PI / 180);
+    let b = c * Math.sin(h * Math.PI / 180);
 
-    // Step 2: OKLAB to Linear RGB.
-    const l_ = Math.pow(l + 0.3963377774 * a + 0.2158037573 * b, 3);
-    const m_ = Math.pow(l - 0.1055613458 * a - 0.0638541728 * b, 3);
-    const s_ = Math.pow(l - 0.0894841775 * a - 1.2914855480 * b, 3);
+    // Step 2: Convert OKLab to Linear RGB
+    // Note: These transformations are complex and derived from the OKLab color space
+    let l_ = l + 0.3963377774 * a + 0.2158037573 * b;
+    let m_ = l - 0.1055613458 * a - 0.0638541728 * b;
+    let s_ = l - 0.0894841775 * a - 1.2914855480 * b;
 
-    const lrgb = [
-        +4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
-        -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
-        -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_,
+    let lRgb = [l_, m_, s_].map(val => Math.pow(val, 3));
+
+    // Transformation matrix for OKLab to linear RGB
+    const mat = [
+        [ 4.0767416621, -3.3077115913,  0.2309699292],
+        [-1.2684380046,  2.6097574011, -0.3413193965],
+        [-0.0041960863, -0.7034186147,  1.7076147010]
     ];
 
-    // Step 3: Linear RGB to Standard RGB.
-    const rgb = lrgb.map(val =>
-        val <= 0.0031308
-            ? 12.92 * val
-            : 1.055 * Math.pow(val, 1 / 2.4) - 0.055
-    );
+    let linearRgb = [
+        mat[0][0] * lRgb[0] + mat[0][1] * lRgb[1] + mat[0][2] * lRgb[2],
+        mat[1][0] * lRgb[0] + mat[1][1] * lRgb[1] + mat[1][2] * lRgb[2],
+        mat[2][0] * lRgb[0] + mat[2][1] * lRgb[1] + mat[2][2] * lRgb[2]
+    ];
 
-    // Step 4: Clamp and Scale RGB Values.
-    return rgb.map(val =>
-        Math.min(255, Math.max(0, Math.round(val * 255)))
-    );
+    // Step 3: Convert Linear RGB to sRGB (Standard RGB)
+    let rgb = linearRgb.map(val => {
+        if (val <= 0.0031308) {
+            return 12.92 * val;
+        } else {
+            return 1.055 * Math.pow(val, 1 / 2.4) - 0.055;
+        }
+    });
+
+    // Clamping the values and converting to range 0-255
+    return rgb.map(val => Math.max(0, Math.min(255, Math.round(val * 255))));
 }
 
 const oklch = (_: Context, args: CSSValue[]): number => {
@@ -158,7 +166,8 @@ const oklch = (_: Context, args: CSSValue[]): number => {
     if (args[0].type == 17 && args[1].type == 31 && args[2].type == 17 && args[3].type == 31 && args[4].type == 17) {
         [l,c,h] = [args[0].number, args[2].number, args[4].number]
         const vals = oklchToRgb(l,c,h);
-        return pack(vals[0] * 255, vals[1] * 255, vals[2] * 255, 1);
+        const packed =  pack(vals[0] , vals[1]  , vals[2]  , 1);
+        return packed;
     } else {
         throw new Error('Incorrect oklch value passed.')
     }

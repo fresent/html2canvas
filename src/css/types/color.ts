@@ -121,7 +121,7 @@ function hue2rgb(t1: number, t2: number, hue: number): number {
     }
 }
 
-function oklchToRgb(l, c, h) {
+function oklchToRgb(l: number, c: number, h: number) {
     // Step 1: Convert OKLCH to OKLab
     let a = c * Math.cos(h * Math.PI / 180);
     let b = c * Math.sin(h * Math.PI / 180);
